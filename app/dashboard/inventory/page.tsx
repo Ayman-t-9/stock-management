@@ -1,3 +1,4 @@
+'use client'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -5,8 +6,42 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { InventoryTable } from "@/components/inventory-table"
 import { Plus, Search, Download } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 
 export default function InventoryPage() {
+  const router = useRouter();
+  
+  const handleAddProduct = () => {
+    router.push("/dashboard/inventory/add");
+  };
+
+  const handleExport = async () => {
+    try {
+      // This is a placeholder - you would typically get this data from your API
+      const response = await fetch('/api/inventory/export');
+      const data = await response.json();
+      
+      // Convert the data to CSV format
+      const csvContent = "data:text/csv;charset=utf-8," 
+        + "Nom,Catégorie,Quantité,Prix\n"
+        + data.map((row: any) => 
+          Object.values(row).join(",")
+        ).join("\n");
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "inventaire.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Erreur lors de l'exportation:", error);
+      // You might want to show an error toast here
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -15,11 +50,11 @@ export default function InventoryPage() {
           <p className="text-muted-foreground">Gérer votre inventaire et stock</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button className="gap-1">
+          <Button className="gap-1" onClick={handleAddProduct}>
             <Plus className="h-4 w-4" />
             Ajouter Produit
           </Button>
-          <Button variant="outline" className="gap-1">
+          <Button variant="outline" className="gap-1" onClick={handleExport}>
             <Download className="h-4 w-4" />
             Exporter
           </Button>

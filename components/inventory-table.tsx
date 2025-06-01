@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -13,18 +14,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ChevronLeft, ChevronRight, Edit, Eye, MoreHorizontal, Trash2, AlertTriangle, QrCode } from "lucide-react"
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { ChevronLeft, ChevronRight, Edit, Eye, MoreHorizontal, Trash2, AlertTriangle, QrCode, Download } from "lucide-react"
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore"
+import { db } from "../lib/firebase"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { QrGenerator } from "./qr-generator"
+import { useToast } from "@/components/ui/use-toast"
 
 interface InventoryTableProps {
   showLowStock?: boolean
 }
 
 export function InventoryTable({ showLowStock = false }: InventoryTableProps) {
+  const router = useRouter()
+  const { toast } = useToast()
   const [currentPage, setCurrentPage] = useState(1)
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,6 +37,9 @@ export function InventoryTable({ showLowStock = false }: InventoryTableProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [currentItem, setCurrentItem] = useState<any>({})
+  const [qrDialogOpen, setQrDialogOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<any>(null)
+  const [exporting, setExporting] = useState(false)
   const itemsPerPage = 5
 
   useEffect(() => {
@@ -126,11 +134,100 @@ export function InventoryTable({ showLowStock = false }: InventoryTableProps) {
     setDialogOpen(false)
   }
 
+  const handleQrCodeClick = (item: any) => {
+    setSelectedProduct(item)
+    setQrDialogOpen(true)
+  }
+
+  const handleExportToExcel = async () => {
+    try {
+      setExporting(true);
+      
+      // Convert data to CSV format
+      const headers = [
+        'Référence',
+        'Nom du Produit',
+        'Catégorie',
+        'Stock Initial',
+        'Stock Actuel',
+        'Seuil Minimal',
+        'Emplacement',
+        'Statut'
+      ];
+
+      const rows = items.map(item => [
+        item.reference || '',
+        item.piece || '',
+        item.categorie || '',
+        item.stockInitial || 0,
+        item.stockActuel || 0,
+        item.seuilAlerte || 0,
+        item.emplacement || '',
+        (item.stockActuel <= item.seuilAlerte) ? 'Stock bas' : 'Normal'
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => 
+          typeof cell === 'string' && cell.includes(',') 
+            ? `"${cell}"`
+            : cell
+        ).join(','))
+      ].join('\n');
+
+      // Create blob and download
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `inventaire_${date}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Succès",
+        description: "L'inventaire a été exporté avec succès",
+      });
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: "Une erreur s'est produite lors de l'exportation",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <>
-      <div className="flex justify-end mb-2">
+      <div className="flex items-center justify-between mb-4">
         <Button onClick={handleAdd}>Ajouter un produit</Button>
+        <Button 
+          variant="outline" 
+          onClick={handleExportToExcel} 
+          disabled={exporting || loading || items.length === 0}
+          className="gap-2"
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? 'Exportation...' : 'Exporter'}
+        </Button>
       </div>
+
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Générer un QR Code</DialogTitle>
+          </DialogHeader>
+          {selectedProduct && <QrGenerator product={selectedProduct} onClose={() => setQrDialogOpen(false)} />}
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <Table>
           <TableHeader>
@@ -179,15 +276,15 @@ export function InventoryTable({ showLowStock = false }: InventoryTableProps) {
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleEdit(item)}>
+                      <DropdownMenuItem onClick={() => router.push(`/dashboard/inventory/${item.id}/edit`)}>
                         <Edit className="mr-2 h-4 w-4" />
                         Modifier
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push(`/dashboard/inventory/${item.id}`)}>
                         <Eye className="mr-2 h-4 w-4" />
                         Voir détails
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleQrCodeClick(item)}>
                         <QrCode className="mr-2 h-4 w-4" />
                         Générer QR Code
                       </DropdownMenuItem>

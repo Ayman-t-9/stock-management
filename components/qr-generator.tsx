@@ -1,137 +1,169 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { QrCode, Download, Printer } from "lucide-react"
-import { db, collection, getDocs } from "../lib/firebase"
+import { Download, Printer } from "lucide-react"
+import { cn } from '@/lib/utils'
+import QRCode from 'qrcode'
 
-export function QrGenerator() {
-  const [reference, setReference] = useState("")
+interface Product {
+  id?: string;
+  reference: string;
+  piece: string;
+  categorie: string;
+  stockInitial: number;
+  stockActuel: number;
+  seuilAlerte: number;
+  emplacement: string;
+  [key: string]: any;
+}
+
+interface QrGeneratorProps {
+  product: Product;
+  onClose?: () => void;
+}
+
+export function QrGenerator({ product, onClose }: QrGeneratorProps) {
   const [size, setSize] = useState("medium")
-  const [generated, setGenerated] = useState(false)
-  const [products, setProducts] = useState<any[]>([])
+  const [qrDataUrl, setQrDataUrl] = useState<string>("")
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    getDocs(collection(db, "products"))
-      .then((snap) => setProducts(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as any[]))
-      .catch(() => setError("Erreur lors du chargement des produits."))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const generateQrCode = () => {
-    if (reference) {
-      setGenerated(true)
+  const getSizeInPixels = (size: string) => {
+    switch (size) {
+      case "small": return 200
+      case "large": return 400
+      default: return 300 // medium
     }
   }
 
-  const selectedProduct = products.find((p) => p.reference === reference)
+  useEffect(() => {
+    generateQRCode()
+  }, [size, product])
+
+  const generateQRCode = async () => {
+    setLoading(true)
+    try {
+      const productData = {
+        id: product.id,
+        reference: product.reference,
+        piece: product.piece,
+        categorie: product.categorie,
+        emplacement: product.emplacement
+      }
+      const dataUrl = await QRCode.toDataURL(JSON.stringify(productData), {
+        width: getSizeInPixels(size),
+        margin: 2,
+        color: {
+          dark: '#000',
+          light: '#fff'
+        }
+      })
+      setQrDataUrl(dataUrl)
+    } catch (error) {
+      console.error('Error generating QR code:', error)
+    }
+    setLoading(false)
+  }
+
+  const handleDownload = () => {
+    const link = document.createElement('a')
+    link.href = qrDataUrl
+    link.download = `qr-${product.reference}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Print QR Code - ${product.reference}</title>
+            <style>
+              body { font-family: system-ui, sans-serif; padding: 20px; }
+              .container { text-align: center; }
+              .product-info { margin: 20px 0; }
+              img { max-width: 100%; height: auto; }
+              @media print {
+                @page { margin: 0.5cm; }
+                body { margin: 0; padding: 10px; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="product-info">
+                <h2>${product.piece}</h2>
+                <p>Référence: ${product.reference}</p>
+                <p>Catégorie: ${product.categorie}</p>
+                <p>Emplacement: ${product.emplacement}</p>
+              </div>
+              <img src="${qrDataUrl}" alt="QR Code" />
+            </div>
+            <script>
+              window.onload = () => window.print();
+            </script>
+          </body>
+        </html>
+      `)
+      printWindow.document.close()
+    }
+  }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Générer un Code QR</CardTitle>
-          <CardDescription>Créez des codes QR pour vos produits</CardDescription>
+          <CardTitle>Code QR du Produit</CardTitle>
+          <CardDescription>
+            {product.piece} - {product.reference}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          {error && <div className="text-red-500 text-sm mb-2">{error}</div>}
-          <form className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="reference">Référence du produit</Label>
-              <Select onValueChange={(value) => setReference(value)} value={reference}>
-                <SelectTrigger id="reference">
-                  <SelectValue placeholder="Sélectionner un produit" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.reference}>
-                      {p.reference} - {p.piece || p.nom || ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <CardContent className="space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="flex items-center space-x-4">
+            <Select value={size} onValueChange={setSize}>
+              <SelectTrigger className="w-32">
+                <SelectValue placeholder="Taille" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="small">Petit</SelectItem>
+                <SelectItem value="medium">Moyen</SelectItem>
+                <SelectItem value="large">Grand</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="custom-reference">Ou entrez une référence personnalisée</Label>
-              <Input
-                id="custom-reference"
-                placeholder="Ex: PROD-001"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
+          <div className={cn(
+            "flex justify-center items-center bg-white rounded-lg p-4",
+            loading && "animate-pulse"
+          )}>
+            {qrDataUrl && (
+              <img 
+                src={qrDataUrl} 
+                alt="QR Code" 
+                className="max-w-full h-auto"
+                style={{ width: getSizeInPixels(size) }}
               />
-            </div>
+            )}
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="size">Taille du code QR</Label>
-              <Select defaultValue="medium" onValueChange={setSize}>
-                <SelectTrigger id="size">
-                  <SelectValue placeholder="Taille" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="small">Petit</SelectItem>
-                  <SelectItem value="medium">Moyen</SelectItem>
-                  <SelectItem value="large">Grand</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button type="button" onClick={generateQrCode} disabled={!reference}>
-              Générer QR Code
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={onClose}>
+              Fermer
             </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Aperçu du Code QR</CardTitle>
-          <CardDescription>Prévisualisation du code QR généré</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center">
-          {generated ? (
-            <>
-              <div
-                className={`bg-white p-4 rounded-lg mb-4 ${
-                  size === "small" ? "w-32 h-32" : size === "medium" ? "w-48 h-48" : "w-64 h-64"
-                }`}
-              >
-                <QrCode className="w-full h-full" />
-              </div>
-
-              <div className="text-center mb-4">
-                <p className="font-medium">{reference}</p>
-                <p className="text-sm text-muted-foreground">
-                  {selectedProduct ? (selectedProduct.piece || selectedProduct.nom || "") : ""}
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" className="gap-1">
-                  <Download className="h-4 w-4" />
-                  Télécharger
-                </Button>
-                <Button variant="outline" className="gap-1">
-                  <Printer className="h-4 w-4" />
-                  Imprimer
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <QrCode className="h-16 w-16 text-muted-foreground opacity-30 mb-4" />
-              <p className="text-muted-foreground">Aucun code QR généré</p>
-              <p className="text-sm text-muted-foreground mt-1">Sélectionnez un produit et générez un code QR</p>
-            </div>
-          )}
+            <Button variant="outline" onClick={handleDownload} disabled={loading}>
+              <Download className="w-4 h-4 mr-2" />
+              Télécharger
+            </Button>
+            <Button variant="outline" onClick={handlePrint} disabled={loading}>
+              <Printer className="w-4 h-4 mr-2" />
+              Imprimer
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
