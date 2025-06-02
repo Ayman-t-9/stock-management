@@ -14,24 +14,33 @@ import { useToast } from "@/components/ui/use-toast"
 export default function AddProductPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const [loading, setLoading] = useState(false);  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const productData = {
-      name: formData.get('name'),
-      category: formData.get('category'),
-      price: parseFloat(formData.get('price') as string),
-      quantity: parseInt(formData.get('quantity') as string),
-      minStock: parseInt(formData.get('minStock') as string),
-      location: formData.get('location'),
-      description: formData.get('description'),
+    const category = formData.get('category') as 'electrical' | 'mechanical';    // Common fields for both categories
+    const baseData = {
+      code: formData.get('code'),
+      categorie: category,
+      marque: formData.get('marque'),
+      reference: formData.get('reference'),
+      observation: formData.get('observation'),
+      emplacement: formData.get('location'),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
+    };    // Add category-specific fields
+    const productData = category === 'electrical' 
+      ? {
+          ...baseData,
+          caracteristique: formData.get('caracteristique'),
+        }
+      : {
+          ...baseData,
+          pompe: formData.get('pompe'),
+          referencePompe: formData.get('referencePompe'),
+          marquePompe: formData.get('marquePompe'),
+        };
 
     try {
       // Add to Firestore
@@ -57,6 +66,7 @@ export default function AddProductPage() {
       setLoading(false);
     }
   };
+  const [selectedCategory, setSelectedCategory] = useState<'electrical' | 'mechanical'>('electrical');
 
   return (
     <div className="container max-w-2xl mx-auto py-6">
@@ -66,51 +76,92 @@ export default function AddProductPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-4">
+            <div className="grid gap-4">              {/* Common Fields */}              <div className="grid gap-2">
+                <Label htmlFor="code">Code</Label>
+                <Input id="code" name="code" placeholder="Code du produit" required />
+              </div>
+
               <div className="grid gap-2">
-                <Label htmlFor="name">Nom du Produit</Label>
-                <Input id="name" name="name" required />
+                <Label htmlFor="piece">Piece</Label>
+                <Input id="piece" name="piece" placeholder="Désignation du produit" required />
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="category">Catégorie</Label>
-                <Select name="category" required>
+                <Select 
+                  name="category" 
+                  required
+                  onValueChange={(value: 'electrical' | 'mechanical') => setSelectedCategory(value)}
+                  defaultValue={selectedCategory}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner une catégorie" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="electrical">Électrique</SelectItem>
                     <SelectItem value="mechanical">Mécanique</SelectItem>
-                    <SelectItem value="plumbing">Plomberie</SelectItem>
-                    <SelectItem value="tools">Outillage</SelectItem>
-                    <SelectItem value="safety">Sécurité</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="price">Prix</Label>
-                <Input id="price" name="price" type="number" step="0.01" required />
-              </div>
+              {/* Category Specific Fields */}
+              {selectedCategory === 'electrical' ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="marque">Marque</Label>
+                    <Input id="marque" name="marque" placeholder="Marque du produit" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="reference">Référence</Label>
+                    <Input id="reference" name="reference" placeholder="Référence du produit" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="quantite">Quantité</Label>
+                    <Input id="quantite" name="quantite" type="number" placeholder="Quantité en stock" min="0" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="caracteristique">Caractéristiques</Label>
+                    <Input id="caracteristique" name="caracteristique" placeholder="Caractéristiques techniques" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="reference">Référence</Label>
+                    <Input id="reference" name="reference" placeholder="Référence de la pièce" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="marque">Marque</Label>
+                    <Input id="marque" name="marque" placeholder="Marque de la pièce" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="quantite">Quantité</Label>
+                    <Input id="quantite" name="quantite" type="number" placeholder="Quantité en stock" min="0" required />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="pompe">Pompe</Label>
+                    <Input id="pompe" name="pompe" placeholder="Type de pompe" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="referencePompe">Référence Pompe</Label>
+                    <Input id="referencePompe" name="referencePompe" placeholder="Référence de la pompe" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="marquePompe">Marque Pompe</Label>
+                    <Input id="marquePompe" name="marquePompe" placeholder="Marque de la pompe" />
+                  </div>
+                </>
+              )}
 
-              <div className="grid gap-2">
-                <Label htmlFor="quantity">Quantité</Label>
-                <Input id="quantity" name="quantity" type="number" required />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="minStock">Stock Minimal</Label>
-                <Input id="minStock" name="minStock" type="number" required />
-              </div>
-
+              {/* Stock Management Fields */}
               <div className="grid gap-2">
                 <Label htmlFor="location">Emplacement</Label>
-                <Input id="location" name="location" required />
+                <Input id="location" name="location" placeholder="Localisation du produit" required />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Input id="description" name="description" />
+                <Label htmlFor="observation">Observations</Label>
+                <Input id="observation" name="observation" placeholder="Observations supplémentaires" />
               </div>
             </div>
 

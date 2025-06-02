@@ -7,7 +7,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useEffect, useState } from "react"
 import { collection, db, getDocs } from "../lib/firebase"
 
-export function EntryVoucherTable() {
+interface EntryVoucherTableProps {
+  category?: 'electrical' | 'mechanical';
+}
+
+export function EntryVoucherTable({ category }: EntryVoucherTableProps) {
   const [vouchers, setVouchers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -18,8 +22,7 @@ export function EntryVoucherTable() {
     async function fetchVouchers() {
       try {
         const snap = await getDocs(collection(db, "entrees"))
-        setVouchers(
-          snap.docs.map((item) => {
+        const allVouchers = snap.docs.map((item) => {
             const data = item.data() as any
             return {
               id: String(item.id),
@@ -28,11 +31,13 @@ export function EntryVoucherTable() {
               fournisseur: data.fournisseur || "",
               fournisseurCategorie: data.fournisseurCategorie || "",
               produit: data.piece || "",
+              category: data.category || "electrical",
               quantite: typeof data.quantite === "number" ? data.quantite : Number(data.quantite) || 0,
               statut: data.statut || "Complété",
             }
           })
-        )
+          
+        setVouchers(category ? allVouchers.filter(v => v.category === category) : allVouchers)
       } catch {
         setError("Erreur lors du chargement des bons d'entrée.")
       } finally {
@@ -40,7 +45,7 @@ export function EntryVoucherTable() {
       }
     }
     fetchVouchers()
-  }, [])
+  }, [category]) // Add category as a dependency to re-fetch when it changes
 
   if (loading) return <div>Chargement...</div>
   if (error) return <div className="text-red-500">{error}</div>
@@ -53,9 +58,9 @@ export function EntryVoucherTable() {
             <th className="h-12 px-4 text-left align-middle font-medium">Référence</th>
             <th className="h-12 px-4 text-left align-middle font-medium">Date</th>
             <th className="h-12 px-4 text-left align-middle font-medium">Fournisseur</th>
-            <th className="h-12 px-4 text-left align-middle font-medium">Produit</th>
+            <th className="h-12 px-4 text-left align-middle font-medium">Piece</th>
             <th className="h-12 px-4 text-left align-middle font-medium">Quantité</th>
-            <th className="h-12 px-4 text-left align-middle font-medium">Statut</th>
+            <th className="h-12 px-4 text-left align-middle font-medium">N° marche</th>
             <th className="h-12 px-4 text-left align-middle font-medium sr-only">Actions</th>
           </tr>
         </thead>

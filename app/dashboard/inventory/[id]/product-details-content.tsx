@@ -11,14 +11,18 @@ import { AlertTriangle, ArrowLeft, Edit } from "lucide-react"
 
 interface Product {
   id?: string;
-  reference: string;
+  code: string;
   piece: string;
-  categorie: string;
-  stockInitial: number;
-  stockActuel: number;
-  seuilAlerte: number;
+  marque: string;
+  reference: string;
+  quantite: number;
+  observation?: string;
   emplacement: string;
-  [key: string]: any;
+  categorie: 'electrical' | 'mechanical';
+  caracteristique?: string;
+  pompe?: string;
+  referencePompe?: string;
+  marquePompe?: string;
 }
 
 export function ProductDetailsContent({ id }: { id: string }) {
@@ -32,18 +36,21 @@ export function ProductDetailsContent({ id }: { id: string }) {
         const docRef = doc(db, "inventory", id);
         const docSnap = await getDoc(docRef);
         
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        if (docSnap.exists()) {          const data = docSnap.data();
           setProduct({
             id: docSnap.id,
-            reference: data.reference || '',
+            code: data.code || '',
             piece: data.piece || '',
-            categorie: data.categorie || '',
-            stockInitial: data.stockInitial || 0,
-            stockActuel: data.stockActuel || 0,
-            seuilAlerte: data.seuilAlerte || 0,
+            marque: data.marque || '',
+            reference: data.reference || '',
+            quantite: data.quantite || 0,
+            observation: data.observation || '',
             emplacement: data.emplacement || '',
-            ...data
+            categorie: data.categorie || 'electrical',
+            caracteristique: data.caracteristique || '',
+            pompe: data.pompe || '',
+            referencePompe: data.referencePompe || '',
+            marquePompe: data.marquePompe || '',
           });
         } else {
           router.push('/dashboard/inventory');
@@ -65,9 +72,6 @@ export function ProductDetailsContent({ id }: { id: string }) {
   if (!product) {
     return <div>Produit non trouvé</div>;
   }
-
-  const isLowStock = product.stockActuel <= product.seuilAlerte;
-
   return (
     <div className="container max-w-2xl mx-auto py-6">
       <div className="flex items-center justify-between mb-6">
@@ -93,56 +97,83 @@ export function ProductDetailsContent({ id }: { id: string }) {
           <CardTitle>Détails du Produit</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Common Fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Référence</h3>
-              <p className="text-lg font-medium">{product.reference}</p>
+              <h3 className="text-sm font-medium text-muted-foreground">Code</h3>
+              <p className="text-lg font-medium">{product.code}</p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Nom du Produit</h3>
-              <p className="text-lg font-medium">{product.piece || product.name}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Catégorie</h3>
-              <p className="text-lg font-medium">{product.categorie || product.category}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Emplacement</h3>
-              <p className="text-lg font-medium">{product.emplacement || product.location}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Stock Initial</h3>
-              <p className="text-lg font-medium">{product.stockInitial || product.initialStock}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Stock Actuel</h3>
-              <p className="text-lg font-medium">{product.stockActuel || product.currentStock}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Seuil Minimal</h3>
-              <p className="text-lg font-medium">{product.seuilAlerte || product.minStock}</p>
+              <h3 className="text-sm font-medium text-muted-foreground">Piece</h3>
+              <p className="text-lg font-medium">{product.piece}</p>
             </div>
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">Statut</h3>
-            {isLowStock ? (
-              <Badge variant="destructive" className="flex items-center gap-1 w-fit">
-                <AlertTriangle className="h-3 w-3" />
-                Stock bas
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="w-fit">
-                Normal
-              </Badge>
-            )}
+            <h3 className="text-sm font-medium text-muted-foreground">Catégorie</h3>
+            <p className="text-lg font-medium">
+              {product.categorie === 'electrical' ? 'Électrique' : 'Mécanique'}
+            </p>
           </div>
+
+          {/* Category Specific Fields */}
+          {product.categorie === 'electrical' ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Marque</h3>
+                <p className="text-lg font-medium">{product.marque}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Référence</h3>
+                <p className="text-lg font-medium">{product.reference}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Caractéristique</h3>
+                <p className="text-lg font-medium">{product.caracteristique || '-'}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Référence</h3>
+                <p className="text-lg font-medium">{product.reference}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Marque</h3>
+                <p className="text-lg font-medium">{product.marque}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Pompe</h3>
+                <p className="text-lg font-medium">{product.pompe || '-'}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Référence Pompe</h3>
+                <p className="text-lg font-medium">{product.referencePompe || '-'}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Marque Pompe</h3>
+                <p className="text-lg font-medium">{product.marquePompe || '-'}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Quantité</h3>
+              <p className="text-lg font-medium">{product.quantite}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Emplacement</h3>
+              <p className="text-lg font-medium">{product.emplacement}</p>
+            </div>
+          </div>
+
+          {product.observation && (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Observation</h3>
+              <p className="text-lg font-medium">{product.observation}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,119 +1,155 @@
 'use client'
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { InventoryTable } from "@/components/inventory-table"
-import { Plus, Search, Download } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Download, Plus, Search } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { useToast } from "@/components/ui/use-toast"
+import { collection, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+
+interface InventoryItem {
+  id: string;
+  code: string;
+  piece: string;
+  marque: string;
+  reference: string;
+  caracteristique: string;
+  quantite: number;
+  remplacement: string;
+  observation?: string;
+  [key: string]: any;
+}
 
 export default function InventoryPage() {
   const router = useRouter();
-  
+  const { toast } = useToast();
+  const [exporting, setExporting] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<'electrical' | 'mechanical'>('electrical');
+
   const handleAddProduct = () => {
     router.push("/dashboard/inventory/add");
   };
 
   const handleExport = async () => {
     try {
-      // This is a placeholder - you would typically get this data from your API
-      const response = await fetch('/api/inventory/export');
-      const data = await response.json();
+      setExporting(true);
       
-      // Convert the data to CSV format
-      const csvContent = "data:text/csv;charset=utf-8," 
-        + "Nom,Catégorie,Quantité,Prix\n"
-        + data.map((row: any) => 
-          Object.values(row).join(",")
-        ).join("\n");
+      // Get reference to inventory collection
+      const colRef = collection(db, "inventory");
+      const snapshot = await getDocs(colRef);
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as InventoryItem[];
 
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "inventaire.csv");
+      // Convert data to CSV format
+      const headers = [
+        'Référence',
+        'Nom du Produit',
+        'Catégorie',
+        'Stock Initial',
+        'Stock Actuel',
+        'Seuil Minimal',
+        'Emplacement',
+        'Statut'
+      ];
+
+      const rows = items.map(item => [
+        item.reference || '',
+        item.piece || '',
+        item.categorie || '',
+        item.stockInitial || 0,
+        item.stockActuel || 0,
+        item.seuilAlerte || 0,
+        item.emplacement || '',
+        (item.stockActuel && item.seuilAlerte && item.stockActuel <= item.seuilAlerte) ? 'Stock bas' : 'Normal'
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => 
+          typeof cell === 'string' && cell.includes(',') 
+            ? `"${cell}"`
+            : cell
+        ).join(','))
+      ].join('\n');
+
+      // Create blob and download
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `inventaire_${date}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Succès",
+        description: "L'inventaire a été exporté avec succès",
+      });
     } catch (error) {
-      console.error("Erreur lors de l'exportation:", error);
-      // You might want to show an error toast here
+      console.error('Error exporting data:', error);
+      toast({
+        variant: "destructive",
+        title: "Erreur", 
+        description: "Une erreur s'est produite lors de l'exportation",
+      });
+    } finally {
+      setExporting(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="container mx-auto py-10">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Inventaire</h2>
-          <p className="text-muted-foreground">Gérer votre inventaire et stock</p>
+          <h1 className="text-3xl font-bold tracking-tight">Inventaire</h1>
+          <p className="text-muted-foreground">Gérez votre stock de pièces détachées</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button className="gap-1" onClick={handleAddProduct}>
-            <Plus className="h-4 w-4" />
-            Ajouter Produit
+        <div className="flex gap-2">
+          <Button onClick={() => router.push('/dashboard/inventory/add')}>
+            Ajouter une pièce
           </Button>
-          <Button variant="outline" className="gap-1" onClick={handleExport}>
-            <Download className="h-4 w-4" />
-            Exporter
+          <Button variant="outline" size="default" onClick={handleExport} disabled={exporting}>
+            <Download className="mr-2 h-4 w-4" />
+            {exporting ? "Exportation..." : "Exporter"}
           </Button>
         </div>
       </div>
+      
+      <div className="flex gap-4 mb-6">
+        <Button
+          variant={selectedCategory === 'electrical' ? 'default' : 'outline'}
+          onClick={() => setSelectedCategory('electrical')}
+        >
+          Électrique
+        </Button>
+        <Button
+          variant={selectedCategory === 'mechanical' ? 'default' : 'outline'}
+          onClick={() => setSelectedCategory('mechanical')}
+        >
+          Mécanique
+        </Button>
+      </div>
 
-      <Tabs defaultValue="all" className="space-y-4">
+      <div className="space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <TabsList>
-            <TabsTrigger value="all">Tous les produits</TabsTrigger>
-            <TabsTrigger value="low-stock">Stock minimal</TabsTrigger>
-            <TabsTrigger value="categories">Par catégorie</TabsTrigger>
-          </TabsList>
-
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input type="search" placeholder="Rechercher produits..." className="pl-8 w-full" />
-            </div>
-            <Select defaultValue="all">
-              <SelectTrigger className="w-full sm:w-[150px]">
-                <SelectValue placeholder="Catégorie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes</SelectItem>
-                <SelectItem value="electrical">Électrique</SelectItem>
-                <SelectItem value="mechanical">Mécanique</SelectItem>
-                <SelectItem value="plumbing">Plomberie</SelectItem>
-                <SelectItem value="tools">Outillage</SelectItem>
-                <SelectItem value="safety">Sécurité</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="relative flex-1 sm:max-w-[300px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input type="search" placeholder="Rechercher produits..." className="pl-8 w-full" />
           </div>
         </div>
 
-        <TabsContent value="all">
-          <InventoryTable showLowStock={false} />
-        </TabsContent>
-
-        <TabsContent value="low-stock">
-          <InventoryTable showLowStock={true} />
-        </TabsContent>
-
-        <TabsContent value="categories">
-          <Card>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <CategoryCard name="Électrique" count={78} />
-                <CategoryCard name="Mécanique" count={45} />
-                <CategoryCard name="Plomberie" count={62} />
-                <CategoryCard name="Outillage" count={35} />
-                <CategoryCard name="Sécurité" count={25} />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        <InventoryTable category={selectedCategory} />
+      </div>
     </div>
-  )
+  );
 }
 
 function CategoryCard({ name, count }: { name: string; count: number }) {

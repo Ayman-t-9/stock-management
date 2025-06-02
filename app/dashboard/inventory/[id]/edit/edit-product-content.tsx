@@ -14,29 +14,37 @@ import { useToast } from "@/components/ui/use-toast"
 
 interface Product {
   id?: string;
-  reference: string;
+  code: string;
   piece: string;
-  categorie: string;
-  stockInitial: number;
-  stockActuel: number;
-  seuilAlerte: number;
+  marque: string;
+  reference: string;
+  quantite: number;
+  observation?: string;
   emplacement: string;
-  [key: string]: any;
+  categorie: 'electrical' | 'mechanical';
+  caracteristique?: string;
+  pompe?: string;
+  referencePompe?: string;
+  marquePompe?: string;
 }
 
 export function EditProductContent({ id }: { id: string }) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [product, setProduct] = useState<Product>({
-    reference: '',
+  const [saving, setSaving] = useState(false);  const [product, setProduct] = useState<Product>({
+    code: '',
     piece: '',
-    categorie: '',
-    stockInitial: 0,
-    stockActuel: 0,
-    seuilAlerte: 0,
+    marque: '',
+    reference: '',
+    quantite: 0,
+    observation: '',
     emplacement: '',
+    categorie: 'electrical',
+    caracteristique: '',
+    pompe: '',
+    referencePompe: '',
+    marquePompe: '',
   });
 
   useEffect(() => {
@@ -45,17 +53,21 @@ export function EditProductContent({ id }: { id: string }) {
         const docRef = doc(db, "inventory", id);
         const docSnap = await getDoc(docRef);
         
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        if (docSnap.exists()) {          const data = docSnap.data();
           setProduct({
             id: docSnap.id,
-            reference: data.reference || '',
+            code: data.code || '',
             piece: data.piece || '',
-            categorie: data.categorie || '',
-            stockInitial: data.stockInitial || 0,
-            stockActuel: data.stockActuel || 0,
-            seuilAlerte: data.seuilAlerte || 0,
+            marque: data.marque || '',
+            reference: data.reference || '',
+            quantite: data.quantite || 0,
+            observation: data.observation || '',
             emplacement: data.emplacement || '',
+            categorie: data.categorie || 'electrical',
+            caracteristique: data.caracteristique || '',
+            pompe: data.pompe || '',
+            referencePompe: data.referencePompe || '',
+            marquePompe: data.marquePompe || '',
           });
         } else {
           router.push('/dashboard/inventory');
@@ -74,17 +86,31 @@ export function EditProductContent({ id }: { id: string }) {
     e.preventDefault();
     setSaving(true);
 
-    try {
-      const docRef = doc(db, "inventory", id);
-      await updateDoc(docRef, {
-        reference: product.reference,
+    try {      const docRef = doc(db, "inventory", id);
+      const baseData = {
+        code: product.code,
         piece: product.piece,
-        categorie: product.categorie,
-        stockInitial: Number(product.stockInitial),
-        stockActuel: Number(product.stockActuel),
-        seuilAlerte: Number(product.seuilAlerte),
+        marque: product.marque,
+        reference: product.reference,
+        quantite: Number(product.quantite),
+        observation: product.observation,
         emplacement: product.emplacement,
-      });
+        categorie: product.categorie,
+      };
+
+      const updateData = product.categorie === 'electrical'
+        ? {
+            ...baseData,
+            caracteristique: product.caracteristique,
+          }
+        : {
+            ...baseData,
+            pompe: product.pompe,
+            referencePompe: product.referencePompe,
+            marquePompe: product.marquePompe,
+          };
+
+      await updateDoc(docRef, updateData);
 
       toast({
         title: "Succès",
@@ -131,11 +157,22 @@ export function EditProductContent({ id }: { id: string }) {
         <CardHeader>
           <CardTitle>Modifier le Produit</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent>          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4">
+              {/* Common Fields */}
               <div className="grid gap-2">
-                <Label htmlFor="piece">Nom du Produit</Label>
+                <Label htmlFor="code">Code</Label>
+                <Input 
+                  id="code" 
+                  name="code" 
+                  value={product.code} 
+                  onChange={handleChange}
+                  required 
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="piece">Piece</Label>
                 <Input 
                   id="piece" 
                   name="piece" 
@@ -150,7 +187,7 @@ export function EditProductContent({ id }: { id: string }) {
                 <Select 
                   name="categorie" 
                   value={product.categorie} 
-                  onValueChange={(value) => setProduct((prev: Product) => ({ ...prev, categorie: value }))}
+                  onValueChange={(value: 'electrical' | 'mechanical') => setProduct((prev: Product) => ({ ...prev, categorie: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner une catégorie" />
@@ -158,55 +195,102 @@ export function EditProductContent({ id }: { id: string }) {
                   <SelectContent>
                     <SelectItem value="electrical">Électrique</SelectItem>
                     <SelectItem value="mechanical">Mécanique</SelectItem>
-                    <SelectItem value="plumbing">Plomberie</SelectItem>
-                    <SelectItem value="tools">Outillage</SelectItem>
-                    <SelectItem value="safety">Sécurité</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="reference">Référence</Label>
-                <Input 
-                  id="reference" 
-                  name="reference" 
-                  value={product.reference} 
-                  onChange={handleChange}
-                  required 
-                />
-              </div>
+              {/* Category Specific Fields */}
+              {product.categorie === 'electrical' ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="marque">Marque</Label>
+                    <Input 
+                      id="marque" 
+                      name="marque" 
+                      value={product.marque} 
+                      onChange={handleChange}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="reference">Référence</Label>
+                    <Input 
+                      id="reference" 
+                      name="reference" 
+                      value={product.reference} 
+                      onChange={handleChange}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="caracteristique">Caractéristiques</Label>
+                    <Input 
+                      id="caracteristique" 
+                      name="caracteristique" 
+                      value={product.caracteristique} 
+                      onChange={handleChange}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="reference">Référence</Label>
+                    <Input 
+                      id="reference" 
+                      name="reference" 
+                      value={product.reference} 
+                      onChange={handleChange}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="marque">Marque</Label>
+                    <Input 
+                      id="marque" 
+                      name="marque" 
+                      value={product.marque} 
+                      onChange={handleChange}
+                      required 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="pompe">Pompe</Label>
+                    <Input 
+                      id="pompe" 
+                      name="pompe" 
+                      value={product.pompe} 
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="referencePompe">Référence Pompe</Label>
+                    <Input 
+                      id="referencePompe" 
+                      name="referencePompe" 
+                      value={product.referencePompe} 
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="marquePompe">Marque Pompe</Label>
+                    <Input 
+                      id="marquePompe" 
+                      name="marquePompe" 
+                      value={product.marquePompe} 
+                      onChange={handleChange}
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="grid gap-2">
-                <Label htmlFor="stockInitial">Stock Initial</Label>
+                <Label htmlFor="quantite">Quantité</Label>
                 <Input 
-                  id="stockInitial" 
-                  name="stockInitial" 
+                  id="quantite" 
+                  name="quantite" 
                   type="number" 
-                  value={product.stockInitial} 
-                  onChange={handleChange}
-                  required 
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="stockActuel">Stock Actuel</Label>
-                <Input 
-                  id="stockActuel" 
-                  name="stockActuel" 
-                  type="number" 
-                  value={product.stockActuel} 
-                  onChange={handleChange}
-                  required 
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="seuilAlerte">Seuil Minimal</Label>
-                <Input 
-                  id="seuilAlerte" 
-                  name="seuilAlerte" 
-                  type="number" 
-                  value={product.seuilAlerte} 
+                  value={product.quantite} 
                   onChange={handleChange}
                   required 
                 />
@@ -220,6 +304,16 @@ export function EditProductContent({ id }: { id: string }) {
                   value={product.emplacement} 
                   onChange={handleChange}
                   required 
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="observation">Observation</Label>
+                <Input 
+                  id="observation" 
+                  name="observation" 
+                  value={product.observation} 
+                  onChange={handleChange}
                 />
               </div>
             </div>
